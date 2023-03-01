@@ -43,8 +43,8 @@ export function AdminPage() {
     </div>
     <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
       <ButtonsAgenda/>
-      <LaserAgenda/>
       <LanternAgenda/>
+      <LaserAgenda/>
       <ChainAgenda/>
     </div>
   </div>;
@@ -62,6 +62,10 @@ function Spinner() {
 
 function Error({error}) {
   return <span className='text-red-500'>{error.toString()}</span>
+}
+
+function YesNo({value}) {
+  return value ? <span className='bg-green-500 px-4 py-1 rounded-md'>Ano</span> : <span className='bg-red-500 px-4 py-1 rounded-md'>Ne</span>
 }
 
 function Card({className, children}) {
@@ -106,11 +110,10 @@ function GameAgenda() {
 
 function ButtonsAgenda(){
   return <Card>
-    <h2>Tlačítka</h2>
-    <hr className='my-3'/>
-    <ButtonsOverview/>
-    <hr className='my-3'/>
     <ButtonsSettings/>
+    <hr className='my-3'/>
+    <h2>Tlačítka</h2>
+    <ButtonsOverview/>
   </Card>
 }
 
@@ -158,7 +161,7 @@ function ButtonsSettings() {
   };
 
   return <div>
-    <h3>Nastavení tlačítek</h3>
+    <h2>Nastavení tlačítek</h2>
     <form onSubmit={handleSubmit(onSubmit)}>
       {
         Object.keys(fields).map(name => {
@@ -193,7 +196,7 @@ function ButtonsOverview() {
     <tbody>
     <tr>
       <td className='font-bold w-1/3 text-right px-4'>Odhaleno:</td>
-      <td>{data.revealed ? <span className='bg-green-500 px-4 py-1 rounded-md'>Ano</span> : <span className='bg-red-500 px-4 py-1 rounded-md'>Ne</span>}</td>
+      <td><YesNo value={data.revealed}/></td>
       <td/>
     </tr>
     <tr>
@@ -221,24 +224,176 @@ function ButtonsOverview() {
 }
 
 function LaserAgenda(){
+  const { data, error, isLoading } = useSWR(`/chain/state`, fetcher, {
+    refreshInterval: 500,
+    dedupingInterval: 500
+  });
+
+  if (isLoading)
+    return <Spinner/>;
+  if (error)
+    return <Error error={error}/>
+
+  let activeBefore = data.time - data.lastActive;
+  let pinging = activeBefore < 5;
   return <Card>
     <h2>Laser</h2>
+    <table className='w-full'>
+    <tbody>
+    <tr>
+      <td>Zaregistrován</td>
+      <td><YesNo value={pinging}/> { pinging && <>({formatTime(activeBefore)})</>}</td>
+    </tr>
+    <tr>
+      <td>Aktivován</td>
+      <td><YesNo value={data.enabled && pinging}/></td>
+    </tr>
+    </tbody>
+    </table>
   </Card>
 }
 
 function LanternAgenda(){
   return <Card>
-    <h2>Lucerny</h2>
+    <LanternSettings/>
+    <hr className='my-2'/>
+    <LanternOverview/>
   </Card>
 }
 
+function LanternSettings() {
+  const [lastData, setLastData] = useState();
+  const [disabled, setDisabled] = useState(false);
+  const [stateMessage, setStateMessage] = useState();
+  const { register, handleSubmit, reset, formState: { errors, isDirty, dirtyFields } } = useForm();
+
+  const { data, error, isLoading, mutate } = useSWR(`/lanterns/settings`, fetcher, {
+    refreshInterval: 1000,
+    onSuccess: data => {
+      // Meth, hacky
+      if (JSON.stringify(data) == JSON.stringify(lastData))
+        return
+      setLastData(data);
+      reset(data, {keepDefaultValues: true});
+    }
+  });
+
+  if (error)
+    return <><h2>Nastavení luceren</h2><Error error={error}/></>
+
+
+  const onSubmit = data => {
+    setDisabled(true);
+    setStateMessage("Odesílám");
+    postData("/lanterns/settings", data).finally( () => {
+      setStateMessage("Uloženo!");
+      setTimeout(() => setStateMessage(undefined), 2000);
+      setDisabled(false);
+      mutate();
+    });
+  }
+  return <>
+    <h2>Nastavení luceren</h2>
+    <form onSubmit={handleSubmit(onSubmit)}>
+    {
+      [1, 2, 3].map(id =>
+        <div key={id} className='row flex items-center my-1'>
+              <div className='w-1/3 text-right px-4'>
+                <label>Interval {id} (start, trvání)</label>
+              </div>
+              <div className='w-1/3'>
+                <Input className={"w-full"}  {...register(`window${id}start`)} dirty={dirtyFields[`window${id}start`] && false} type="number"/>
+              </div>
+              <div className='w-1/3'>
+                <Input className={"w-full"}  {...register(`window${id}duration`)} dirty={dirtyFields[`window${id}duration`] && false} type="number"/>
+              </div>
+            </div>
+      )
+    }
+    <input disabled={disabled} type={"submit"} className="w-full bg-purple-500 disabled:bg-gray-500 rounded-lg my-2 p-2 border-none shadow-sm" value={
+        stateMessage ? stateMessage : "Uložit"
+      }/>
+    </form>
+  </>;
+}
+
+function LanternOverview() {
+  const { data, error, isLoading } = useSWR(`/lanterns/state`, fetcher, {
+    refreshInterval: 500,
+    dedupingInterval: 500
+  });
+
+  if (isLoading)
+    return <Spinner/>;
+  if (error)
+    return <Error error={error}/>
+
+  return <>
+    <h2>Přehled luceren</h2>
+    <table className='w-full'>
+    <tbody>
+    <tr>
+      <td>Lucerna</td>
+      <td>Aktivní před</td>
+    </tr>
+    {
+      Object.keys(data.lanterns).map(id => {
+        let lantern = data.lanterns[id];
+        return <tr key={id}>
+          <td className="font-bold w-1/3 text-right px-4">{id}:</td>
+          <td>{(data.time - lantern.lastActive).toFixed(1)} s</td>
+        </tr>
+      })
+    }
+    </tbody>
+  </table>
+  </>;
+}
+
 function ChainAgenda(){
+  const { data, error, isLoading } = useSWR(`/chain/state`, fetcher, {
+    refreshInterval: 500,
+    dedupingInterval: 500
+  });
+
+  if (isLoading)
+    return <Spinner/>;
+  if (error)
+    return <Error error={error}/>
+
+  let activeBefore = data.time - data.lastActive;
+  let pinging = activeBefore < 5;
+
   return <Card>
     <h2>Lidský řetěz</h2>
+    <table className='w-full'>
+    <tbody>
+    <tr>
+      <td>Zaregistrován</td>
+      <td><YesNo value={pinging}/> { pinging && <>({formatTime(activeBefore)})</>}</td>
+    </tr>
+    <tr>
+      <td>Aktivován</td>
+      <td><YesNo value={data.active && pinging}/></td>
+    </tr>
+    </tbody>
+    </table>
   </Card>
 }
 
 export function ButtonsPage() {
-  return <div><h1>Buttons page</h1></div>
+  const { data, error, isLoading } = useSWR(`/buttons/state`, fetcher, {
+    refreshInterval: 500,
+    dedupingInterval: 500
+  });
+
+  if (isLoading)
+    return <Spinner/>;
+  if (error)
+    return <Error error={error}/>
+  return <div className='container mx-auto pt-28'>
+    <Card className="text-6xl font-bold p-28 text-center
+    ">{data.message ? data.message : "Zde není nic k vidění."}
+    </Card></div>
 }
 

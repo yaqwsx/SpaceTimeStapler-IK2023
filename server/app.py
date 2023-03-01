@@ -82,17 +82,21 @@ class BigGame(BaseModel):
 
 class LaserGame(BaseModel):
     lastActive: float = 0 # timestamp
+    enabled: bool = False
 
 class LanternState(BaseModel):
     lastActive: float = 0 # timestamp
 
+class LanternSettings(BaseModel):
+    window1start: float = 90
+    window1duration: float = 10
+    window2start: float = 180
+    window2duration: float = 10
+    window3start: float = 320
+    window3duration: float = 10
+
 class LanternGame(BaseModel):
-    window1start: float = 0
-    window1duration: float = 0
-    window2start: float = 0
-    window2duration: float = 0
-    window3start: float = 0
-    window3duration: float = 0
+    settings: LanternSettings = LanternSettings()
     lanterns: Dict[int, LanternState] = {}
 
     _lanternIdCounter: int = PrivateAttr(default=0)
@@ -113,8 +117,12 @@ class LanternGame(BaseModel):
 
 
 class ChainGame(BaseModel):
-    activeTime: float = 0
+    lastActive: float = 0 # timestamp
     active: bool = False
+
+    def tick(self):
+        if time() - self.lastActive < 10:
+            self.active = False
 
 
 BUTTONS_GAME = ButtonsGame()
@@ -226,9 +234,62 @@ def lanternDoors():
 
     roundTime = time() - BIG_GAME.roundStart
 
+    sett = LANTERN_GAME.settings
+    CHAIN_GAME.tick()
     return {
         "doorA": CHAIN_GAME.active,
-        "doorB": LANTERN_GAME.window1start < roundTime < (LANTERN_GAME.window1start + LANTERN_GAME.window1duration),
-        "doorC": LANTERN_GAME.window2start < roundTime < (LANTERN_GAME.window2start + LANTERN_GAME.window2duration),
-        "doorD": LANTERN_GAME.window3start < roundTime < (LANTERN_GAME.window3start + LANTERN_GAME.window3duration),
+        "doorB": sett.window1start < roundTime < (sett.window1start + sett.window1duration),
+        "doorC": sett.window2start < roundTime < (sett.window2start + sett.window2duration),
+        "doorD": sett.window3start < roundTime < (sett.window3start + sett.window3duration),
     }
+
+@app.get("/lanterns/settings")
+def lanternSettings():
+    return LANTERN_GAME.settings
+
+@app.post("/lanterns/settings")
+def lanternSettings(settings: LanternSettings):
+    LANTERN_GAME.settings = settings
+    return LANTERN_GAME.settings
+
+# Laser ------------------------------------------------------------------------
+
+class LaserRegistration(BaseModel):
+    enabled: bool
+
+@app.post("/laser/register")
+def laserRegister(state: LaserRegistration):
+    LASER_GAME.enabled = state.enabled
+    LASER_GAME.lastActive = time()
+    return {
+        "restart": BIG_GAME.restarting
+    }
+
+@app.get("/laser/state")
+def laserState():
+    return {
+        "time": time(),
+        "lastActive": LASER_GAME.lastActive,
+        "enabled": LASER_GAME.enabled
+    }
+
+# Chain ------------------------------------------------------------------------
+
+class ChainRegistration(BaseModel):
+    enabled: bool
+
+@app.post("/chain/register")
+def chainRegister(state: ChainRegistration):
+    CHAIN_GAME.enabled = state.enabled
+    CHAIN_GAME.lastActive = time()
+    return {}
+
+@app.get("/chain/state")
+def chainState():
+    CHAIN_GAME.tick()
+    return {
+        "time": time(),
+        "lastActive": CHAIN_GAME.lastActive,
+        "active": CHAIN_GAME.active
+    }
+
