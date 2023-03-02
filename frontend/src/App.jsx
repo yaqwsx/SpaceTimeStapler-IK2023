@@ -335,6 +335,7 @@ function LanternOverview() {
     <tr>
       <td>Lucerna</td>
       <td>Aktivní před</td>
+      <td>Baterie</td>
     </tr>
     {
       Object.keys(data.lanterns).map(id => {
@@ -342,6 +343,7 @@ function LanternOverview() {
         return <tr key={id}>
           <td className="font-bold w-1/3 text-right px-4">{id}:</td>
           <td>{(data.time - lantern.lastActive).toFixed(1)} s</td>
+          <td>{lantern.battery} %</td>
         </tr>
       })
     }

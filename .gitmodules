@@ -1,0 +1,3 @@
+[submodule "lanternFw/lib/BlackBox_library"]
+	path = lanternFw/lib/BlackBox_library
+	url = https://github.com/RoboticsBrno/BlackBox_library.git

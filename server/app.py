@@ -1,4 +1,4 @@
-from fastapi import FastAPI
+from fastapi import FastAPI, Request
 from pydantic import BaseModel, PrivateAttr
 from typing import Dict
 from time import time
@@ -86,6 +86,7 @@ class LaserGame(BaseModel):
 
 class LanternState(BaseModel):
     lastActive: float = 0 # timestamp
+    battery: float = 0 # percentage
 
 class LanternSettings(BaseModel):
     window1start: float = 90
@@ -105,10 +106,11 @@ class LanternGame(BaseModel):
         self._lanternIdCounter += 1
         return self._lanternIdCounter
 
-    def onLanternActivity(self, id: int) -> None:
+    def onLanternActivity(self, id: int, battery: int) -> None:
         timestamp = time()
 
         self.lanterns.setdefault(id, LanternState()).lastActive = timestamp
+        self.lanterns.setdefault(id, LanternState()).battery = battery
         self.purgeLanterns(timestamp)
 
     def purgeLanterns(self, timestamp: float) -> None:
@@ -210,9 +212,12 @@ def lanternRegister():
         "id": LANTERN_GAME.getNewLanternId()
     }
 
+class LanternRegistration(BaseModel):
+    battery: int
+
 @app.post("/lanterns/{id}/register")
-def lanternRegister(id: int):
-    LANTERN_GAME.onLanternActivity(id)
+async def lanternRegister(id: int, body: LanternRegistration):
+    LANTERN_GAME.onLanternActivity(id, body.battery)
     return {}
 
 @app.get("/lanterns/state")
@@ -225,7 +230,11 @@ def lanternState():
 @app.get("/lanterns/doors")
 def lanternDoors():
     def response(a, b, c, d):
-        return {f"door{key}": val for key, val in zip("ABCD", [a, b, c, d])}
+        base = {
+            "restarting": BIG_GAME.restarting
+        }
+        base.update({f"door{key}": val for key, val in zip("ABCD", [a, b, c, d])})
+        return base
 
     if BIG_GAME.restarting:
         return response(True, True, True, True)
@@ -236,12 +245,11 @@ def lanternDoors():
 
     sett = LANTERN_GAME.settings
     CHAIN_GAME.tick()
-    return {
-        "doorA": CHAIN_GAME.active,
-        "doorB": sett.window1start < roundTime < (sett.window1start + sett.window1duration),
-        "doorC": sett.window2start < roundTime < (sett.window2start + sett.window2duration),
-        "doorD": sett.window3start < roundTime < (sett.window3start + sett.window3duration),
-    }
+    return response(
+        CHAIN_GAME.active,
+        sett.window1start < roundTime < (sett.window1start + sett.window1duration),
+        sett.window2start < roundTime < (sett.window2start + sett.window2duration),
+        sett.window3start < roundTime < (sett.window3start + sett.window3duration))
 
 @app.get("/lanterns/settings")
 def lanternSettings():
