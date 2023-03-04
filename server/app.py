@@ -263,6 +263,7 @@ def lanternDoors():
 
     sett = LANTERN_GAME.settings
     CHAIN_GAME.tick()
+    print(CHAIN_GAME)
     return response(
         CHAIN_GAME.active,
         sett.window1start < roundTime < (sett.window1start + sett.window1duration),

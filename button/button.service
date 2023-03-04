@@ -1,0 +1,11 @@
+[Unit]
+Description=Start button
+
+[Service]
+Type=simple
+ExecStart=python3 /home/pi/button/button.py --direct http://192.168.88.133:8000/buttons
+Restart=on-failure
+RestartSec=2s
+
+[Install]
+WantedBy=multi-user.target

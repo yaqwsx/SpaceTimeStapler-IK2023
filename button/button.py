@@ -60,10 +60,6 @@ if __name__ == "__main__":
         led_g = gpiozero.LED(16)
         led_r = gpiozero.LED(20)
         def r(state, limit):
-            if not state["on"]:
-                led_g.off()
-                led_r.off()
-                return
             if state["revealed"]:
                 led_g.on()
                 led_r.off()
@@ -91,7 +87,7 @@ if __name__ == "__main__":
                 if status_time.trigger():
                     x = requests.get(server + "/decision")
                     status = x.json()
-                    decision_time = x.json()["pressTolerance"]
+                    decision_deadline = x.json()["pressTolerance"]
                     reveal(status, decision_deadline)
                 if register_timer.trigger():
                     requests.post(server + f"/{id}/register")

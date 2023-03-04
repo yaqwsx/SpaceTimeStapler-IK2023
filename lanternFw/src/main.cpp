@@ -56,6 +56,15 @@ void runNormalMode() {
     beacon.show(BRIGHTNESS);
 }
 
+int getPressure(BlackBox::Touchpad& touch, int samples = 50) {
+    int pressure = 0;
+    for ( int i = 0; i != samples; i++) {
+        pressure += touch.calculate().pressure;
+        vTaskDelay(10 / portTICK_PERIOD_MS);
+    }
+    pressure /= samples;
+    return pressure;
+}
 
 void shutdownRoutine() {
     Manager& man = Manager::singleton();
@@ -69,11 +78,18 @@ void shutdownRoutine() {
     touch.init(&ldc);
 
     vTaskDelay(1000 / portTICK_PERIOD_MS);
-    int initialPressure = touch.calculate().pressure;
+    const int INITIAL_SAMPLES = 1000;
+    int initialPressure = 0;
     vTaskDelay(1000 / portTICK_PERIOD_MS);
+    for ( int i = 0; i != INITIAL_SAMPLES; i++) {
+        initialPressure += touch.calculate().pressure;
+        vTaskDelay(10 / portTICK_PERIOD_MS);
+    }
+    initialPressure /= INITIAL_SAMPLES;
+
     int pressedDown = 0;
     while ( true ) {
-        if (touch.calculate().pressure - initialPressure > 15) {
+        if (getPressure(touch) - initialPressure > 20) {
             pressedDown++;
             top[0] = Rgb(0, 0, 255);
             beacon.show( BRIGHTNESS );
@@ -166,6 +182,7 @@ extern "C" void app_main() {
             for ( int i = 0; i != 4; i++ )
                 handleDoors( doorJson.get(), i );
         }
+        std::cout << "Batt: " << man.power().batteryPercentage( true ) << "\n";
         vTaskDelay(1000 / portTICK_PERIOD_MS);
     }
 }
