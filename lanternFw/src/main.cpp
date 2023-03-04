@@ -7,7 +7,6 @@
 #include <thread>
 
 using namespace BlackBox;
-using namespace rofi::fi;
 using namespace std::literals;
 
 static const int BRIGHTNESS = 50;

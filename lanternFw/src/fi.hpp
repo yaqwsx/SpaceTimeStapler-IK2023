@@ -11,21 +11,17 @@
 
 #include <lwip/err.h>
 #include <lwip/sys.h>
+#include <lwip/inet.h>
 
 #include <freertos/FreeRTOS.h>
 #include <freertos/event_groups.h>
 
-namespace rofi::fi::detail {
 
 enum WiFiBits {
     ConnectedBit = 1 << 0,
     FailedBit = 1 << 1,
     GotIPBit = 1 << 2
 };
-
-} // namespace rofi::fi::detail
-
-namespace rofi::fi {
 
 inline void initNvs() {
     esp_err_t ret = nvs_flash_init();
@@ -77,15 +73,15 @@ public:
         _async = false;
         _maxAttempts = maxAttempts;
         _successCallback = [this]() {
-            xEventGroupSetBits( _eventBits, detail::ConnectedBit );
+            xEventGroupSetBits( _eventBits, ConnectedBit );
         };
         _ipCallback = [this]( esp_ip4_addr_t ) {
-            xEventGroupSetBits( _eventBits, detail::GotIPBit );
+            xEventGroupSetBits( _eventBits, GotIPBit );
         };
         _errorCallback = [this]( const std::string&, int attempt ) {
             if ( attempt != _maxAttempts )
                 return true;
-            xEventGroupSetBits( _eventBits, detail::FailedBit );
+            xEventGroupSetBits( _eventBits, FailedBit );
             return false;
         };
         return *this;
@@ -129,19 +125,19 @@ public:
             return true;
 
         EventBits_t bits = xEventGroupWaitBits( _eventBits,
-            detail::ConnectedBit | detail::FailedBit,
+            ConnectedBit | FailedBit,
             pdFALSE,
             pdFALSE,
             portMAX_DELAY );
-        if ( bits & detail::ConnectedBit )
+        if ( bits & ConnectedBit )
             return true;
-        if ( bits & detail::FailedBit )
+        if ( bits & FailedBit )
             return false;
         __builtin_unreachable();
     }
 
     void waitForIp() {
-        xEventGroupWaitBits( _eventBits, detail::GotIPBit, pdFALSE, pdFALSE,
+        xEventGroupWaitBits( _eventBits, GotIPBit, pdFALSE, pdFALSE,
             portMAX_DELAY );
     }
 
@@ -192,9 +188,3 @@ inline void delayMs( int msCount ) {
     vTaskDelay( msCount / portTICK_PERIOD_MS );
 }
 
-/**
- * Perform authentication for wlan_fi
- */
-void authWlanFi(const char* username, const char* password );
-
-} // namespace rofi::fi
