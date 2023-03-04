@@ -41,6 +41,9 @@ export function AdminPage() {
     <div className='w-full my-4'>
     <GameAgenda/>
     </div>
+    <div className='w-full my-4'>
+    <CpuAgenda/>
+    </div>
     <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
       <ButtonsAgenda/>
       <LanternAgenda/>
@@ -106,6 +109,115 @@ function GameAgenda() {
     </div>
 
   </Card>
+}
+
+function CpuForm() {
+  const [lastData, setLastData] = useState();
+  const [disabled, setDisabled] = useState(false);
+  const [stateMessage, setStateMessage] = useState();
+  const { register, handleSubmit, reset, formState: { errors, isDirty, dirtyFields } } = useForm();
+  const { data, error, isLoading, mutate } = useSWR(`/cpu/settings`, fetcher, {
+    refreshInterval: 100,
+    onSuccess: data => {
+      // Meth, hacky
+      if (JSON.stringify(data) == JSON.stringify(lastData))
+        return
+      setLastData(data);
+      reset(data, {keepDefaultValues: true});
+    }
+  });
+
+  const onSubmit = data => {
+    setDisabled(true);
+    setStateMessage("Odesílám");
+    postData("/cpu/settings", data).finally( () => {
+      setStateMessage("Uloženo!");
+      setTimeout(() => setStateMessage(undefined), 2000);
+      setDisabled(false);
+      mutate();
+    });
+  }
+
+  const fields = {
+    dischargeRate: "Rychlost vybíjení (0-1 za 10s)",
+    capFuel: "Energie 1 kondenzatoru (0-1)",
+    overrideFuel: "Nekontrolovat energii",
+    capThreshold: "Je třeba kondenzátor alespoň",
+  };
+
+  return <div className="w-full">
+    <form onSubmit={handleSubmit(onSubmit)}>
+      {
+        Object.keys(fields).map(name => {
+          return <div key={name} className='row flex items-center my-1'>
+          <div className='w-1/3 text-right px-4'>
+            <label>{fields[name]}</label>
+          </div>
+          <div className='w-2/3'>
+          <Input className={"w-full"}  {...register(name)} dirty={dirtyFields[name] && false}
+            step={0.001} type={name == "overrideFuel" ? "checkbox" : "number"}/>
+          </div>
+        </div>
+        })
+      }
+      <input disabled={disabled} type={"submit"}
+        className="w-full bg-purple-500 disabled:bg-gray-500 rounded-lg my-2 p-2 border-none shadow-sm"
+        value={
+        stateMessage ? stateMessage : "Uložit"
+      }/>
+    </form>
+    <button className='w-full py-1 my-1 bg-yellow-500' onClick={() => postData("/cpu/command/motoron").then(mutate)}>Zapnout motor</button>
+      <button className='w-full py-1 my-1 bg-yellow-500' onClick={() => postData("/cpu/command/motoroff").then(mutate)}>Vypnout motor</button>
+      <button className='w-full py-1 my-1 bg-yellow-500' onClick={() => postData("/cpu/command/clear").then(mutate)}>Vymazat kód</button>
+      <button className='w-full py-1 my-1 bg-yellow-500' onClick={() => postData("/cpu/command/back").then(mutate)}>Vymazat znak</button>
+      <button className='w-full py-1 my-1 bg-yellow-500' onClick={() => postData("/cpu/command/fanfare").then(mutate)}>Fanfára</button>
+      <button className='w-full py-1 my-1 bg-yellow-500' onClick={() => postData("/cpu/command/alert").then(mutate)}>Výstraha</button>
+      <button className='w-full py-1 my-1 bg-yellow-500' onClick={() => postData("/cpu/command/cap").then(mutate)}>Přidat kondík</button>
+  </div>;
+}
+
+function CpuAgenda() {
+    const { data, error, isLoading, mutate } = useSWR(`/cpu/state`, fetcher, {
+        refreshInterval: 1000,
+        dedupingInterval: 1000,
+    });
+    if (error) return <Error error={error} />;
+    if (isLoading) return <Spinner />;
+
+    let activeBefore = data.time - data.lastActive;
+    let pinging = activeBefore < 5;
+    return (
+        <Card className="w-full">
+            <h2>Cpu</h2>
+            <div className="w-full grid grid-cols-1 md:grid-cols-2 gap-4">
+                <table className="w-full">
+                    <tbody>
+                        <tr>
+                            <td>Zaregistrován</td>
+                            <td>
+                                <YesNo value={pinging} />{" "}
+                                {pinging && <>({formatTime(activeBefore)})</>}
+                            </td>
+                        </tr>
+                        <tr>
+                            <td>Heslo</td>
+                            <td>{data.password}</td>
+                        </tr>
+                        <tr>
+                            <td>Stav paliva</td>
+                            <td>{data.fuel * 100} %</td>
+                        </tr>
+                        <tr>
+                            <td>Poslední kondenzátor</td>
+                            <td>{data.lastCap}</td>
+                        </tr>
+                    </tbody>
+                </table>
+                <CpuForm/>
+            </div>
+
+        </Card>
+    );
 }
 
 function ButtonsAgenda(){
@@ -224,7 +336,7 @@ function ButtonsOverview() {
 }
 
 function LaserAgenda(){
-  const { data, error, isLoading } = useSWR(`/chain/state`, fetcher, {
+  const { data, error, isLoading } = useSWR(`/laser/state`, fetcher, {
     refreshInterval: 500,
     dedupingInterval: 500
   });
@@ -377,6 +489,10 @@ function ChainAgenda(){
     <tr>
       <td>Aktivován</td>
       <td><YesNo value={data.active && pinging}/></td>
+    </tr>
+    <tr>
+      <td>Poslední hodnota</td>
+      <td>{data.lastValue}</td>
     </tr>
     </tbody>
     </table>

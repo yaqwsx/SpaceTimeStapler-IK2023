@@ -1,6 +1,6 @@
 from fastapi import FastAPI, Request
 from pydantic import BaseModel, PrivateAttr
-from typing import Dict
+from typing import Dict, List
 from time import time
 from fastapi.middleware.cors import CORSMiddleware
 
@@ -121,10 +121,27 @@ class LanternGame(BaseModel):
 class ChainGame(BaseModel):
     lastActive: float = 0 # timestamp
     active: bool = False
+    lastValue: int = 0
 
     def tick(self):
-        if time() - self.lastActive < 10:
+        if time() - self.lastActive > 10:
             self.active = False
+
+class CpuSettings(BaseModel):
+    dischargeRate: float = 0
+    capFuel: float = 0.1
+    capThreshold: int = 1000
+    overrideFuel: bool = False
+
+
+class CpuGame(BaseModel):
+    lastActive: float = 0 # timestamp
+    phase: int = 0
+    fuel: float = 0
+    lastCap: float = 0
+    password: str = ""
+    commandQueue: List[str] = None
+    settings: CpuSettings = CpuSettings()
 
 
 BUTTONS_GAME = ButtonsGame()
@@ -132,6 +149,7 @@ BIG_GAME = BigGame()
 LASER_GAME = LaserGame()
 LANTERN_GAME = LanternGame()
 CHAIN_GAME = ChainGame()
+CPU_GAME = CpuGame()
 
 
 # Buttons ----------------------------------------------------------------------
@@ -285,11 +303,14 @@ def laserState():
 
 class ChainRegistration(BaseModel):
     enabled: bool
+    lastValue: int
 
 @app.post("/chain/register")
 def chainRegister(state: ChainRegistration):
-    CHAIN_GAME.enabled = state.enabled
+    CHAIN_GAME.active = state.enabled
+    CHAIN_GAME.lastValue = state.lastValue
     CHAIN_GAME.lastActive = time()
+    print(CHAIN_GAME)
     return {}
 
 @app.get("/chain/state")
@@ -298,6 +319,54 @@ def chainState():
     return {
         "time": time(),
         "lastActive": CHAIN_GAME.lastActive,
-        "active": CHAIN_GAME.active
+        "active": CHAIN_GAME.active,
+        "lastValue": CHAIN_GAME.lastValue
     }
 
+
+# Cpu --------------------------------------------------------------------------
+class CpuRegistration(BaseModel):
+    password: str
+    fuel: float
+    phase: int
+    lastCap: int
+
+@app.post("/cpu/register")
+def cpuRegister(state: CpuRegistration):
+    CPU_GAME.phase = state.phase
+    CPU_GAME.lastActive = time()
+    CPU_GAME.password = state.password
+    CPU_GAME.lastCap = state.lastCap
+    CPU_GAME.fuel = state.fuel
+
+    print(state)
+
+    commands = CPU_GAME.commandQueue
+    CPU_GAME.commandQueue = []
+    print(CPU_GAME.settings)
+    return {
+        "dischargeRate": CPU_GAME.settings.dischargeRate,
+        "overrideFuel": CPU_GAME.settings.overrideFuel,
+        "capThreshold": CPU_GAME.settings.capThreshold,
+        "commands": commands
+    }
+
+@app.post("/cpu/settings")
+def cpuSettings(settings: CpuSettings):
+    CPU_GAME.settings = settings
+    return {}
+
+@app.get("/cpu/settings")
+def cpuSettings():
+    return CPU_GAME.settings
+
+@app.post("/cpu/command/{command}")
+def cpuSettings(command: str):
+    CPU_GAME.commandQueue.append(command)
+    return {}
+
+@app.get("/cpu/state")
+def cpuState():
+    val = CPU_GAME.dict()
+    val.update({"time": time()})
+    return val
