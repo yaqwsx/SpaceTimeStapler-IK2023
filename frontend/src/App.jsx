@@ -491,11 +491,17 @@ function ChainAgenda(){
       <td><YesNo value={data.active && pinging}/></td>
     </tr>
     <tr>
+      <td>Vynucena aktivace</td>
+      <td><YesNo value={data.override}/></td>
+    </tr>
+    <tr>
       <td>Poslední hodnota</td>
       <td>{data.lastValue}</td>
     </tr>
     </tbody>
     </table>
+    <button className='w-full py-1 my-1 bg-yellow-500' onClick={() => postData("/chain/overrideOn").then(mutate)}>Vynutit aktivaci</button>
+    <button className='w-full py-1 my-1 bg-yellow-500' onClick={() => postData("/chain/overrideOff").then(mutate)}>Nenutit aktivaci</button>
   </Card>
 }
 

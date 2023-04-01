@@ -89,11 +89,11 @@ class LanternState(BaseModel):
     battery: float = 0 # percentage
 
 class LanternSettings(BaseModel):
-    window1start: float = 90
+    window1start: float = 60
     window1duration: float = 10
-    window2start: float = 180
+    window2start: float = 300
     window2duration: float = 10
-    window3start: float = 320
+    window3start: float = 450
     window3duration: float = 10
 
 class LanternGame(BaseModel):
@@ -122,6 +122,7 @@ class ChainGame(BaseModel):
     lastActive: float = 0 # timestamp
     active: bool = False
     lastValue: int = 0
+    override: bool = False
 
     def tick(self):
         if time() - self.lastActive > 10:
@@ -240,6 +241,7 @@ async def lanternRegister(id: int, body: LanternRegistration):
 
 @app.get("/lanterns/state")
 def lanternState():
+    LANTERN_GAME.purgeLanterns(time())
     return {
         "lanterns": LANTERN_GAME.lanterns,
         "time": time()
@@ -265,7 +267,7 @@ def lanternDoors():
     CHAIN_GAME.tick()
     print(CHAIN_GAME)
     return response(
-        CHAIN_GAME.active,
+        CHAIN_GAME.active or CHAIN_GAME.override,
         sett.window1start < roundTime < (sett.window1start + sett.window1duration),
         sett.window2start < roundTime < (sett.window2start + sett.window2duration),
         sett.window3start < roundTime < (sett.window3start + sett.window3duration))
@@ -321,8 +323,19 @@ def chainState():
         "time": time(),
         "lastActive": CHAIN_GAME.lastActive,
         "active": CHAIN_GAME.active,
+        "override": CHAIN_GAME.override,
         "lastValue": CHAIN_GAME.lastValue
     }
+
+@app.post("/chain/overrideOn")
+def chainOverrideOn():
+    CHAIN_GAME.override = True
+    return {}
+
+@app.post("/chain/overrideOff")
+def chainOverrideOff():
+    CHAIN_GAME.override = False
+    return {}
 
 
 # Cpu --------------------------------------------------------------------------
